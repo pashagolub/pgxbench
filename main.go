@@ -2,19 +2,21 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
-
-	pgx "github.com/jackc/pgx/v5"
 )
 
+var connStr = flag.String("c", "", "connection string to PostgreSQL database")
+
 func main() {
-	conn, err := pgx.Connect(context.Background(), "postgresql://pasha@localhost:5432/Test")
+	ctx := context.Background()
+	flag.Parse()
+	conn, err := ConnectToDB(ctx, *connStr)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
-	defer conn.Close(context.Background())
-	var version string
-	_ = conn.QueryRow(context.Background(), "SELECT version()").Scan(&version)
-	fmt.Printf("Connected to database %s on %s", conn.Config().Database, version)
+	defer CloseDB(ctx, conn)
+	if err = InitDB(ctx, conn); err != nil {
+		log.Fatalf("Unable to initialise test schema: %v\n", err)
+	}
 }
