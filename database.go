@@ -2,10 +2,21 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"time"
 
 	pgx "github.com/jackc/pgx/v5"
 )
+
+type DbUser struct {
+	Id   int
+	Name string
+	Age  int
+	Meta string
+}
+
+var TestUser DbUser = DbUser{Id: 1, Name: "John", Age: 42, Meta: `{"role": "developer"}`}
 
 // ConnectToDB connects to the database and tries to execute empty query to check the connection
 func ConnectToDB(ctx context.Context, connStr string) (*pgx.Conn, error) {
@@ -42,6 +53,21 @@ func CloseDB(ctx context.Context, conn *pgx.Conn) error {
 }
 
 // RunBenchmarks will run benchmarks available and output results
-func RunBenchmarks(ctx context.Context, conn *pgx.Conn) error {
-	return conn.Ping(ctx)
+func RunBenchmarks(ctx context.Context, conn *pgx.Conn) (err error) {
+	report := func(name string, f func(context.Context, *pgx.Conn) error) {
+		t := time.Now()
+		log.Println("Starting", name)
+		e := f(ctx, conn)
+		d := time.Since(t)
+		if e != nil {
+			err = errors.Join(err, e)
+			log.Printf(`Error running "%s": %v`, name, err)
+		}
+		log.Printf("Finished %s in %s", name, d)
+	}
+
+	report("Insert row by row", InsertSimple)
+	report("Insert in batch", InsertBatch)
+	report("Insert using copy", InsertCopy)
+	return
 }
