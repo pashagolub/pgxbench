@@ -15,6 +15,7 @@ type Database interface {
 	Begin(context.Context) (pgx.Tx, error)
 	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
 	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
 	SendBatch(ctx context.Context, b *pgx.Batch) (br pgx.BatchResults)
 	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
 }
@@ -28,15 +29,19 @@ type DbUser struct {
 
 var TestUser DbUser = DbUser{Id: 1, Name: "John", Age: 42, Meta: `{"role": "developer"}`}
 
+var NewConn = func(ctx context.Context, connStr string) (Database, error) {
+	return pgpool.New(ctx, connStr)
+}
+
 // ConnectToDB connects to the database and tries to execute empty query to check the connection
 func ConnectToDB(ctx context.Context, connStr string) (Database, error) {
-	conn, err := pgpool.New(ctx, connStr)
+	conn, err := NewConn(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}
 	var version string
 	err = conn.QueryRow(context.Background(), "SELECT version()").Scan(&version)
-	log.Printf("Connected to database %s on %s", conn.Config().ConnConfig.Database, version)
+	log.Printf("Connected to database on %s", version)
 	return conn, err
 }
 
