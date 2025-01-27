@@ -7,7 +7,17 @@ import (
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
+	pgconn "github.com/jackc/pgx/v5/pgconn"
+	pgpool "github.com/jackc/pgx/v5/pgxpool"
 )
+
+type Database interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	SendBatch(ctx context.Context, b *pgx.Batch) (br pgx.BatchResults)
+	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
+}
 
 type DbUser struct {
 	Id   int
@@ -19,19 +29,19 @@ type DbUser struct {
 var TestUser DbUser = DbUser{Id: 1, Name: "John", Age: 42, Meta: `{"role": "developer"}`}
 
 // ConnectToDB connects to the database and tries to execute empty query to check the connection
-func ConnectToDB(ctx context.Context, connStr string) (*pgx.Conn, error) {
-	conn, err := pgx.Connect(ctx, connStr)
+func ConnectToDB(ctx context.Context, connStr string) (Database, error) {
+	conn, err := pgpool.New(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}
 	var version string
 	err = conn.QueryRow(context.Background(), "SELECT version()").Scan(&version)
-	log.Printf("Connected to database %s on %s", conn.Config().Database, version)
+	log.Printf("Connected to database %s on %s", conn.Config().ConnConfig.Database, version)
 	return conn, err
 }
 
 // InitDB creates a table and try to insert a row to check it the schema is correct
-func InitDB(ctx context.Context, conn *pgx.Conn) error {
+func InitDB(ctx context.Context, conn Database) error {
 	_, err := conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS test (id bigint, name text, age int, meta jsonb)")
 	if err != nil {
 		return err
@@ -46,15 +56,23 @@ func InitDB(ctx context.Context, conn *pgx.Conn) error {
 }
 
 // CloseDB drops a test table and closes the connetion to database
-func CloseDB(ctx context.Context, conn *pgx.Conn) error {
-	defer conn.Close(ctx)
+func CloseDB(ctx context.Context, conn Database) error {
+	defer func() {
+		switch c := conn.(type) {
+		case *pgpool.Pool:
+			c.Close()
+		case *pgx.Conn:
+			c.Close(ctx)
+		}
+	}()
 	_, err := conn.Exec(ctx, "DROP TABLE test")
 	return err
 }
 
 // RunBenchmarks will run benchmarks available and output results
-func RunBenchmarks(ctx context.Context, conn *pgx.Conn) (err error) {
-	report := func(name string, f func(context.Context, *pgx.Conn) error) {
+func RunBenchmarks(ctx context.Context, conn Database) (err error) {
+
+	report := func(name string, f func(context.Context, Database) error) {
 		t := time.Now()
 		log.Println("Starting", name)
 		e := f(ctx, conn)

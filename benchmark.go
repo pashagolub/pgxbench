@@ -6,7 +6,7 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 )
 
-func InsertSimple(ctx context.Context, conn *pgx.Conn) error {
+func InsertSimple(ctx context.Context, conn Database) error {
 	for i := 0; i < *numberOfRows; i++ {
 		_, err := conn.Exec(ctx, `INSERT INTO test (id, name, age, meta) VALUES ($1, $2, $3, $4)`,
 			TestUser.Id, TestUser.Name, TestUser.Age, TestUser.Meta)
@@ -17,7 +17,7 @@ func InsertSimple(ctx context.Context, conn *pgx.Conn) error {
 	return nil
 }
 
-func InsertBatch(ctx context.Context, conn *pgx.Conn) error {
+func InsertBatch(ctx context.Context, conn Database) error {
 	for i := 0; i < *numberOfRows; i = i + *batchSize {
 		batch := &pgx.Batch{}
 		for b := 0; b < *batchSize; b++ {
@@ -32,7 +32,7 @@ func InsertBatch(ctx context.Context, conn *pgx.Conn) error {
 	return nil
 }
 
-func InsertCopy(ctx context.Context, conn *pgx.Conn) error {
+func InsertCopy(ctx context.Context, conn Database) error {
 	_, err := conn.CopyFrom(ctx, pgx.Identifier{"test"},
 		[]string{"id", "name", "age", "meta"},
 		pgx.CopyFromSlice(*numberOfRows, func(i int) ([]any, error) {
@@ -41,7 +41,7 @@ func InsertCopy(ctx context.Context, conn *pgx.Conn) error {
 	return err
 }
 
-func FetchSelectScan(ctx context.Context, conn *pgx.Conn) error {
+func FetchSelectScan(ctx context.Context, conn Database) error {
 	rows, err := conn.Query(ctx, "SELECT id, name, age, meta FROM test LIMIT $1", *numberOfRows)
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func FetchSelectScan(ctx context.Context, conn *pgx.Conn) error {
 	return nil
 }
 
-func FetchSelectCollect(ctx context.Context, conn *pgx.Conn) error {
+func FetchSelectCollect(ctx context.Context, conn Database) error {
 	rows, err := conn.Query(ctx, "SELECT id, name, age, meta FROM test LIMIT $1", *numberOfRows)
 	if err != nil {
 		return err
