@@ -62,12 +62,15 @@ func RunBenchmarks(ctx context.Context, conn *pgx.Conn) (err error) {
 		if e != nil {
 			err = errors.Join(err, e)
 			log.Printf(`Error running "%s": %v`, name, err)
+			return
 		}
-		log.Printf("Finished %s in %s", name, d)
+		log.Printf("Finished %s in %dms\n", name, d.Milliseconds())
 	}
 
 	report("Insert row by row", InsertSimple)
 	report("Insert in batch", InsertBatch)
 	report("Insert using copy", InsertCopy)
+	report("Select, then Scan()", FetchSelectScan)
+	report("Select, then CollectRows()", FetchSelectCollect)
 	return
 }

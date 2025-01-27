@@ -40,3 +40,32 @@ func InsertCopy(ctx context.Context, conn *pgx.Conn) error {
 		}))
 	return err
 }
+
+func FetchSelectScan(ctx context.Context, conn *pgx.Conn) error {
+	rows, err := conn.Query(ctx, "SELECT id, name, age, meta FROM test LIMIT $1", *numberOfRows)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user DbUser
+		err = rows.Scan(&user.Id, &user.Name, &user.Age, &user.Meta)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func FetchSelectCollect(ctx context.Context, conn *pgx.Conn) error {
+	rows, err := conn.Query(ctx, "SELECT id, name, age, meta FROM test LIMIT $1", *numberOfRows)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	_, err = pgx.CollectRows[DbUser](rows, pgx.RowToStructByPos)
+	if err != nil {
+		return err
+	}
+	return nil
+}
